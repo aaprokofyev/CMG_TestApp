@@ -2,10 +2,13 @@ package cmg.demo.cmg_testapp.managers;
 
 import android.util.Log;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import cmg.demo.cmg_testapp.model.RateLimitError;
 import cmg.demo.cmg_testapp.model.User;
+import retrofit2.adapter.rxjava.HttpException;
 import rx.Observer;
 
 /**
@@ -51,6 +54,17 @@ public class RequestManager implements Observer<List<User>> {
 
     @Override
     public void onError(Throwable e) {
+        if (e instanceof HttpException) {
+            //TODO: parse RateLimitError
+            HttpException exception = (HttpException) e;
+            Log.d(TAG, "HTTP exception: " + exception.getMessage());
+            // We had non-2XX http error
+        }
+        if (e instanceof IOException) {
+            IOException exception = (IOException) e;
+            Log.d(TAG, "HTTP exception: " + exception.getMessage());
+            // A network or conversion error happened
+        }
         //do nothing
     }
 

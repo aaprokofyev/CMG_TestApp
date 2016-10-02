@@ -3,8 +3,12 @@ package cmg.demo.cmg_testapp.managers;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
+import org.xml.sax.ErrorHandler;
+
+import java.lang.annotation.Annotation;
 import java.util.List;
 
+import cmg.demo.cmg_testapp.model.RateLimitError;
 import cmg.demo.cmg_testapp.model.User;
 import retrofit2.Retrofit;
 import retrofit2.adapter.rxjava.RxJavaCallAdapterFactory;
@@ -16,6 +20,7 @@ import rx.Observer;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Action0;
 import rx.functions.Action1;
+import rx.plugins.RxJavaErrorHandler;
 import rx.schedulers.Schedulers;
 
 /**
@@ -26,13 +31,14 @@ public class ApiInteractor {
 
     private final String TAG = getClass().getSimpleName();
 
+    private Retrofit retrofit;
     private static final String API_URL = "https://api.github.com/";
-
     private GitHubAPIService mGitHubAPIService;
+
 
     public ApiInteractor() {
 
-        Retrofit retrofit = new Retrofit.Builder()
+         retrofit = new Retrofit.Builder()
                 .baseUrl(API_URL)
                 .addConverterFactory(GsonConverterFactory.create())
                 .addCallAdapterFactory(RxJavaCallAdapterFactory.create())
@@ -65,7 +71,7 @@ public class ApiInteractor {
                 .doOnError(new Action1<Throwable>() {
                     @Override
                     public void call(Throwable throwable) {
-                        Log.d(TAG, "Error: " + throwable.getMessage());
+                        Log.d(TAG, "Error message: " + throwable.getMessage());
                     }
                 })
                 .doOnCompleted(new Action0() {
@@ -82,5 +88,4 @@ public class ApiInteractor {
         @GET("users")
         Observable<List<User>> getUsers(@Query("since") String maxUserId);
     }
-
 }

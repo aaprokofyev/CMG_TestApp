@@ -16,7 +16,7 @@ public class User {
     String login;
 
     @SerializedName("id")
-    int id;
+    String id;
 
     @SerializedName("avatar_url")
     String avatarUrl;
@@ -104,7 +104,7 @@ public class User {
         return login;
     }
 
-    public int getId() {
+    public String getId() {
         return id;
     }
 
