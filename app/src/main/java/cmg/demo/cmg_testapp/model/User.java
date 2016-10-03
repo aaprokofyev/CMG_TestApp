@@ -112,4 +112,16 @@ public class User {
         return avatarUrl;
     }
 
+    public void setLogin(String login) {
+        this.login = login;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
+    }
+
 }

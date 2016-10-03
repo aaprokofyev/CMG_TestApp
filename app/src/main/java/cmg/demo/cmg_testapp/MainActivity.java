@@ -9,10 +9,11 @@ import android.util.Log;
 import java.util.List;
 
 import cmg.demo.cmg_testapp.components.AdapterUsersList;
-import cmg.demo.cmg_testapp.managers.RequestManager;
+import cmg.demo.cmg_testapp.managers.DBRequestManager;
+import cmg.demo.cmg_testapp.managers.GitHubApiRequestManager;
 import cmg.demo.cmg_testapp.model.User;
 
-public class MainActivity extends AppCompatActivity implements RequestManager.GitHubResponseService {
+public class MainActivity extends AppCompatActivity implements GitHubApiRequestManager.GitHubResponseService {
     private final String TAG = getClass().getSimpleName();
 
     private String lastLoadedId;
@@ -49,27 +50,33 @@ public class MainActivity extends AppCompatActivity implements RequestManager.Gi
                 // TODO: need to load earlier then we reach the bottom + check if some request is already in progress
                 if (firstVisibleItem == totalItemCount - visibleItemCount) {
                     Log.d(TAG, "Scrolled to the bottom");
-                    RequestManager.getInstance().getUsers(lastLoadedId);
+                    GitHubApiRequestManager.getInstance().getUsers(lastLoadedId);
                 }
             }
         });
 
         // TODO: check if internet connection is ON, otherwise notify user
-        RequestManager.getInstance().getUsers(null);
+        GitHubApiRequestManager.getInstance().getUsers(null);
     }
 
     @Override
     protected void onResume() {
         Log.d(TAG, "onResume");
         super.onResume();
-        RequestManager.getInstance().registerResponseServiceCallback(this);
+        GitHubApiRequestManager.getInstance().registerResponseServiceCallback(this);
     }
 
     @Override
     protected void onPause() {
         Log.d(TAG, "onPause");
         super.onPause();
-        RequestManager.getInstance().removeResponseServiceCallBack(this);
+        GitHubApiRequestManager.getInstance().removeResponseServiceCallBack(this);
+//        User user = DBRequestManager.getInstance(this).get("33");
+//        if (user != null) {
+//            Log.d(TAG, "User 33 from database: ID:" + user.getId() + ", LOGIN:" + user.getLogin() + ", PHOTOURL:" + user.getAvatarUrl());
+//        } else {
+//            Log.d(TAG, "No such user");
+//        }
     }
 
     @Override
@@ -82,6 +89,9 @@ public class MainActivity extends AppCompatActivity implements RequestManager.Gi
             listAdapter.addUsers(users);
             lastLoadedId = users.get(users.size() - 1).getId();
             Log.d(TAG, "lastLoadedId=" + lastLoadedId);
+
+            List<Long> ids = DBRequestManager.getInstance(this).putAll(users);
+            Log.d(TAG, "Users are added in database: internal ids:" + ids.toString());
         }
     }
 

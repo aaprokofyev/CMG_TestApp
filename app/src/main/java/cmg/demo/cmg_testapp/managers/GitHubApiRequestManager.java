@@ -2,6 +2,8 @@ package cmg.demo.cmg_testapp.managers;
 
 import android.util.Log;
 
+import com.google.gson.Gson;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,23 +16,23 @@ import rx.Observer;
 /**
  * Created by alprokof on 9/30/2016.
  */
-public class RequestManager implements Observer<List<User>> {
+public class GitHubApiRequestManager implements Observer<List<User>> {
 
     private final String TAG = getClass().getSimpleName();
 
-    private ApiInteractor apiInteractor;
+    private GitHubApiInteractor gitHubApiInteractor;
 
     private static List<GitHubResponseService> gitHubResponseServiceListeners = new ArrayList<>();
 
-    private RequestManager() {
-        apiInteractor = new ApiInteractor();
+    private GitHubApiRequestManager() {
+        gitHubApiInteractor = new GitHubApiInteractor();
     }
 
     public static class RequestManagerHolder {
-        public static final RequestManager HOLDER_INSTANCE = new RequestManager();
+        public static final GitHubApiRequestManager HOLDER_INSTANCE = new GitHubApiRequestManager();
     }
 
-    public static RequestManager getInstance() {
+    public static GitHubApiRequestManager getInstance() {
         return RequestManagerHolder.HOLDER_INSTANCE;
     }
 
@@ -44,7 +46,7 @@ public class RequestManager implements Observer<List<User>> {
 
     public void getUsers(String maxUserId) {
         Log.d(TAG, "Sending \"getUsers\" request");
-        apiInteractor.getUsers(this, maxUserId);
+        gitHubApiInteractor.getUsers(this, maxUserId);
     }
 
     @Override
@@ -58,6 +60,12 @@ public class RequestManager implements Observer<List<User>> {
             //TODO: parse RateLimitError
             HttpException exception = (HttpException) e;
             Log.d(TAG, "HTTP exception: " + exception.getMessage());
+            try {
+                RateLimitError error = new Gson().getAdapter(RateLimitError.class).fromJson(exception.response().errorBody().string());
+                Log.d(TAG, "error: " + error.getMessage());
+            } catch (IOException e1) {
+                e1.printStackTrace();
+            }
             // We had non-2XX http error
         }
         if (e instanceof IOException) {
@@ -70,7 +78,7 @@ public class RequestManager implements Observer<List<User>> {
 
     @Override
     public void onNext(List<User> userList) {
-        Log.d(TAG, "RequestManager: onNext " + userList.toString());
+        Log.d(TAG, "GitHubApiRequestManager: onNext " + userList.toString());
         for (GitHubResponseService listener : gitHubResponseServiceListeners) {
             listener.onUsersReceived(userList);
         }

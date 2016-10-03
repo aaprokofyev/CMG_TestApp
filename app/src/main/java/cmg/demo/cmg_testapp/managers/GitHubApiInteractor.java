@@ -27,7 +27,7 @@ import rx.schedulers.Schedulers;
  * Created by alprokof on 9/30/2016.
  * This class is used to interact with GitHub service via REST client.
  */
-public class ApiInteractor {
+public class GitHubApiInteractor {
 
     private final String TAG = getClass().getSimpleName();
 
@@ -36,7 +36,7 @@ public class ApiInteractor {
     private GitHubAPIService mGitHubAPIService;
 
 
-    public ApiInteractor() {
+    public GitHubApiInteractor() {
 
          retrofit = new Retrofit.Builder()
                 .baseUrl(API_URL)
