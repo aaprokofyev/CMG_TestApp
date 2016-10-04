@@ -55,10 +55,11 @@ public class GitHubApiRequestManager implements Observer<List<User>> {
     }
 
     @Override
-    public void onError(Throwable e) {
-        if (e instanceof HttpException) {
-            //TODO: parse RateLimitError
-            HttpException exception = (HttpException) e;
+    public void onError(Throwable throwable) {
+        if (throwable instanceof HttpException) {
+            //TODO: need to make good error handling.
+            // For example parse RateLimitError and pass it on UI
+            HttpException exception = (HttpException) throwable;
             Log.d(TAG, "HTTP exception: " + exception.getMessage());
             try {
                 RateLimitError error = new Gson().getAdapter(RateLimitError.class).fromJson(exception.response().errorBody().string());
@@ -66,14 +67,15 @@ public class GitHubApiRequestManager implements Observer<List<User>> {
             } catch (IOException e1) {
                 e1.printStackTrace();
             }
-            // We had non-2XX http error
         }
-        if (e instanceof IOException) {
-            IOException exception = (IOException) e;
+        if (throwable instanceof IOException) {
+            IOException exception = (IOException) throwable;
             Log.d(TAG, "HTTP exception: " + exception.getMessage());
-            // A network or conversion error happened
         }
-        //do nothing
+
+        for (GitHubResponseService listener : gitHubResponseServiceListeners) {
+            listener.onError(throwable);
+        }
     }
 
     @Override
@@ -86,5 +88,7 @@ public class GitHubApiRequestManager implements Observer<List<User>> {
 
     public interface GitHubResponseService {
         void onUsersReceived(List<User> users);
+
+        void onError(Throwable throwable);
     }
 }

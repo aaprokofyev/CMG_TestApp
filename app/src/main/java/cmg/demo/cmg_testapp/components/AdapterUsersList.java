@@ -24,7 +24,7 @@ import cmg.demo.cmg_testapp.model.User;
 public class AdapterUsersList extends RecyclerView.Adapter<AdapterUsersList.CustomViewHolder> {
 
     private final String TAG = getClass().getSimpleName();
-    private static ArrayList<User> usersList = new ArrayList<>();
+    private ArrayList<User> usersList = new ArrayList<>();
     private Context context;
     private String lastLoadedId = null;
 
@@ -55,7 +55,6 @@ public class AdapterUsersList extends RecyclerView.Adapter<AdapterUsersList.Cust
     @Override
     public void onBindViewHolder(CustomViewHolder holder, int position) {
         User user = usersList.get(position);
-        Log.d(TAG, "Updating: " + user.getId());
         holder.loginView.setText(user.getLogin());
         Glide.with(context).load(user.getAvatarUrl()).into(holder.photoView);
     }
@@ -66,10 +65,10 @@ public class AdapterUsersList extends RecyclerView.Adapter<AdapterUsersList.Cust
     }
 
     public void addUsers(List<User> users) {
-        Log.d(TAG, "Add users: " + users.size());
+        Log.d(TAG, "UI: Adding " + users.size() + " users");
         usersList.addAll(users);
 
-        lastLoadedId = users.get(users.size() - 1).getId();
+        lastLoadedId = users.get(users.size() - 1).getGitHubId();
         Log.d(TAG, "UI: lastLoadedId=" + lastLoadedId);
 
         notifyDataSetChanged();

@@ -3,12 +3,8 @@ package cmg.demo.cmg_testapp.managers;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
-import org.xml.sax.ErrorHandler;
-
-import java.lang.annotation.Annotation;
 import java.util.List;
 
-import cmg.demo.cmg_testapp.model.RateLimitError;
 import cmg.demo.cmg_testapp.model.User;
 import retrofit2.Retrofit;
 import retrofit2.adapter.rxjava.RxJavaCallAdapterFactory;
@@ -20,7 +16,6 @@ import rx.Observer;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.plugins.RxJavaErrorHandler;
 import rx.schedulers.Schedulers;
 
 /**
@@ -64,7 +59,7 @@ public class GitHubApiInteractor {
                     public void call(List<User> usersList) {
                         Log.d(TAG, "OnNext");
                         for (User user : usersList) {
-                            Log.d(TAG, "User fetched: " + user.getId() + ":" + user.getLogin());
+                            Log.d(TAG, "User fetched: " + user.getGitHubId() + ":" + user.getLogin());
                         }
                     }
                 })

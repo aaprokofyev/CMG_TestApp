@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">CMG_TestApp</string>
     <string name="user_pic">User profile photo</string>
+    <string name="github_users">GitHub users:</string>
 </resources>

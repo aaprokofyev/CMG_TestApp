@@ -1,5 +1,11 @@
 package cmg.demo.cmg_testapp;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
@@ -12,9 +18,10 @@ import java.util.List;
 import cmg.demo.cmg_testapp.components.AdapterUsersList;
 import cmg.demo.cmg_testapp.managers.DBRequestManager;
 import cmg.demo.cmg_testapp.managers.GitHubApiRequestManager;
+import cmg.demo.cmg_testapp.managers.NetworkManager;
 import cmg.demo.cmg_testapp.model.User;
 
-public class MainActivity extends AppCompatActivity implements GitHubApiRequestManager.GitHubResponseService {
+public class MainActivity extends AppCompatActivity implements GitHubApiRequestManager.GitHubResponseService, NetworkManager.NetworkStateChanged {
     private final String TAG = getClass().getSimpleName();
     private final int PRELOAD_ITEMS_DELTA = 10;
 
@@ -48,16 +55,14 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
                 int totalItemCount = layoutManager.getItemCount();
                 int firstVisibleItem = layoutManager.findFirstVisibleItemPosition();
 
-                Log.d(TAG, "visibleItemCount=" + visibleItemCount + ", totalItemCount=" + totalItemCount + ", firstVisibleItem=" + firstVisibleItem);
-
-                // TODO: need to load earlier then we reach the bottom + check if some request is already in progress
                 if (!isLoadingInProgress && firstVisibleItem >= totalItemCount - visibleItemCount - PRELOAD_ITEMS_DELTA) {
-                    Log.d(TAG, "Scrolled to the bottom");
-                    GitHubApiRequestManager.getInstance().getUsers(listAdapter.getLastLoadedId());
-                    isLoadingInProgress = true;
+                    String lastLoadedUserId = listAdapter.getLastLoadedId();
+                    Log.d(TAG, "Scrolled to the bottom. Requesting data since " + lastLoadedUserId);
+                    requestUsersPage(lastLoadedUserId);
                 }
             }
         });
+
 
         // TODO: check if internet connection is ON, otherwise notify user and make load from DB
     }
@@ -67,8 +72,11 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
         Log.d(TAG, "onStart");
         super.onStart();
         GitHubApiRequestManager.getInstance().registerResponseServiceCallback(this);
+        NetworkManager.getInstance(this).registerNetworkStateCallback(this);
+
+        // Request first page when activity just created
         if (isActivityJustCreated) {
-            GitHubApiRequestManager.getInstance().getUsers(null);
+            requestUsersPage(null);
             isActivityJustCreated = false;
         }
     }
@@ -78,26 +86,55 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
         Log.d(TAG, "onStop");
         super.onStop();
         GitHubApiRequestManager.getInstance().removeResponseServiceCallBack(this);
-        List<User> users = new ArrayList<>();
+        NetworkManager.getInstance(this).removeNetworkStateCallback(this);
+    }
 
-        users.addAll(DBRequestManager.getInstance(this).getPage(null));
-        users.addAll(DBRequestManager.getInstance(this).getPage("46"));
+    private void requestUsersPage(String sinceUser){
 
-        Log.d(TAG, "Loaded users: " + users.size());
+        isLoadingInProgress = true;
+
+        // Select where from the page should be requested, i.e. network or DB
+        if (NetworkManager.getInstance(getBaseContext()).isNetworkAvailable()) {
+            GitHubApiRequestManager.getInstance().getUsers(sinceUser);
+        } else {
+            //TODO: better to use other thread for database operations... but they are too small
+            // observable can also be used here
+            List<User> users = DBRequestManager.getInstance(getBaseContext()).getPage(sinceUser);
+            if (!users.isEmpty()) {
+                listAdapter.addUsers(users);
+            }
+            isLoadingInProgress = false;
+        }
     }
 
     @Override
     public void onUsersReceived(List<User> users) {
         Log.d(TAG, "onUsersReceived");
-
         isLoadingInProgress = false;
 
-        if (users != null && !users.isEmpty()) {
+        if (!users.isEmpty()) {
             listAdapter.addUsers(users);
-
-            List<Long> ids = DBRequestManager.getInstance(this).putAll(users);
-            Log.d(TAG, "Users are added in database: internal ids:" + ids.toString());
+            // When users received from the network they immediately updated in DB
+            DBRequestManager.getInstance(this).insertOrUpdate(users);
         }
     }
 
+    @Override
+    public void onError(Throwable throwable) {
+        Log.d(TAG, "onError");
+        isLoadingInProgress = false;
+    }
+
+    @Override
+    public void onNetworkAvailable() {
+        if(listAdapter.getItemCount() == 0 ){
+            // We enabled network on empty screen, let's load some data
+            requestUsersPage(null);
+        }
+    }
+
+    @Override
+    public void onNetworkUnavailable() {
+        //do nothing
+    }
 }

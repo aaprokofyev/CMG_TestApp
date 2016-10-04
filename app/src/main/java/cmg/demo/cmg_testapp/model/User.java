@@ -16,7 +16,7 @@ public class User {
     String login;
 
     @SerializedName("id")
-    String id;
+    String gitHubId;
 
     @SerializedName("avatar_url")
     String avatarUrl;
@@ -104,8 +104,8 @@ public class User {
         return login;
     }
 
-    public String getId() {
-        return id;
+    public String getGitHubId() {
+        return gitHubId;
     }
 
     public String getAvatarUrl() {
@@ -116,12 +116,20 @@ public class User {
         this.login = login;
     }
 
-    public void setId(String id) {
-        this.id = id;
+    public void setGitHubId(String gitHubId) {
+        this.gitHubId = gitHubId;
     }
 
     public void setAvatarUrl(String avatarUrl) {
         this.avatarUrl = avatarUrl;
     }
 
+    @Override
+    public String toString() {
+        return "User{" +
+                "gitHubId='" + gitHubId + '\'' +
+                ", login='" + login + '\'' +
+                ", avatarUrl='" + avatarUrl + '\'' +
+                '}';
+    }
 }

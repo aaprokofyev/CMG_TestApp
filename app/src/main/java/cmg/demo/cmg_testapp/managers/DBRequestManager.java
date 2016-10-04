@@ -4,6 +4,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,11 +21,11 @@ public class DBRequestManager {
 
     private DBHelper dbHelper;
 
+    private static volatile DBRequestManager instance;
+
     private DBRequestManager(Context context) {
         dbHelper = new DBHelper(context);
     }
-
-    private static volatile DBRequestManager instance;
 
     public static DBRequestManager getInstance(Context context) {
         DBRequestManager localInstance = instance;
@@ -47,7 +48,7 @@ public class DBRequestManager {
         SQLiteDatabase db = dbHelper.getWritableDatabase();
 
         ContentValues values = new ContentValues();
-        values.put(DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID, user.getId());
+        values.put(DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID, user.getGitHubId());
         values.put(DBHelper.DBUsersContract.Users.COLUMN_LOGIN, user.getLogin());
         values.put(DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL, user.getAvatarUrl());
         long id = db.insert(DBHelper.DBUsersContract.Users.TABLE_NAME, null, values);
@@ -65,7 +66,7 @@ public class DBRequestManager {
         List<Long> ids = new ArrayList<>(users.size());
         for (User user : users) {
             ids.add(put(user));
-            //TODO: optimize in order not to open and close db each time
+            //TODO: optimize in order not to open and close db on each user
         }
         return ids;
     }
@@ -104,7 +105,7 @@ public class DBRequestManager {
             if (cursor.getCount() > 0) {
                 cursor.moveToFirst();
                 user = new User();
-                user.setId(cursor.getString(cursor.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID)));
+                user.setGitHubId(cursor.getString(cursor.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID)));
                 user.setLogin(cursor.getString(cursor.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_LOGIN)));
                 user.setAvatarUrl(cursor.getString(cursor.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL)));
             }
@@ -121,15 +122,16 @@ public class DBRequestManager {
      * Get page of users since provided github ID
      *
      * @param sinceGithubId
-     * @return list of users or null if no users found
+     * @return list of users or empty list if no users found
      */
     public List<User> getPage(String sinceGithubId) {
 
         SQLiteDatabase db = dbHelper.getReadableDatabase();
 
+        List<User> users = new ArrayList<>();
         Long lastLoadedUserId = null;
 
-        if(sinceGithubId!=null) {
+        if (sinceGithubId != null) {
             // Get internal ID of last user
             String[] projectionUser = {
                     DBHelper.DBUsersContract.Users._ID,
@@ -157,8 +159,7 @@ public class DBRequestManager {
                 }
                 cursorUser.close();
             }
-        }
-        else{
+        } else {
             //will be loaded from ID 0 till ID 30 first time
             lastLoadedUserId = -1L;
         }
@@ -174,7 +175,7 @@ public class DBRequestManager {
             String sortOrderPage = DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID + " DESC";
 
             long sinceID = lastLoadedUserId + 1L;
-            long tillID = sinceID+ PAGE_SIZE;
+            long tillID = sinceID + PAGE_SIZE;
             String limitPage = sinceID + ", " + tillID;
 
             Cursor cursorPage = db.query(
@@ -188,25 +189,25 @@ public class DBRequestManager {
                     limitPage
             );
 
-            if (cursorPage != null) {
-                int cursorSize = cursorPage.getCount();
-                if (cursorSize > 0) {
-                    List<User> users = new ArrayList<>(cursorSize);
 
-                    cursorPage.moveToFirst();
-                    do {
-                        User user = new User();
-                        user.setId(cursorPage.getString(cursorPage.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID)));
-                        user.setLogin(cursorPage.getString(cursorPage.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_LOGIN)));
-                        user.setAvatarUrl(cursorPage.getString(cursorPage.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL)));
-                        users.add(user);
-                    } while (cursorPage.moveToNext());
+            if (cursorPage != null && cursorPage.getCount() > 0) {
+                cursorPage.moveToFirst();
+                do {
+                    User user = new User();
+                    user.setGitHubId(cursorPage.getString(cursorPage.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID)));
+                    user.setLogin(cursorPage.getString(cursorPage.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_LOGIN)));
+                    user.setAvatarUrl(cursorPage.getString(cursorPage.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL)));
+                    users.add(user);
+                } while (cursorPage.moveToNext());
 
-                    return users;
-                }
+                cursorPage.close();
             }
+
         }
-        return null;
+
+        db.close();
+
+        return users;
     }
 
     /**
@@ -223,15 +224,36 @@ public class DBRequestManager {
         values.put(DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL, user.getAvatarUrl());
 
         String selection = DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID + " LIKE ?";
-        String[] selectionArgs = {String.valueOf(user.getId())};
+        String[] selectionArgs = {String.valueOf(user.getGitHubId())};
 
         int count = db.update(
                 DBHelper.DBUsersContract.Users.TABLE_NAME,
                 values,
                 selection,
                 selectionArgs);
+
+        db.close();
         return count;
     }
 
+    /**
+     * This function is used to insert or update users in database
+     *
+     * @param users to put/update in/into the database
+     */
+    public void insertOrUpdate(List<User> users) {
+        SQLiteDatabase db = dbHelper.getReadableDatabase();
 
+        for (User user : users) {
+            if (get(user.getGitHubId()) != null) {
+                update(user);
+                Log.d(TAG, "Updating user " + user.getGitHubId());
+            } else {
+                //TODO: use putAll after optimization
+                put(user);
+                Log.d(TAG, "Inserting user " + user.getGitHubId());
+            }
+        }
+        db.close();
+    }
 }
