@@ -1,18 +1,11 @@
 package cmg.demo.cmg_testapp;
 
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import cmg.demo.cmg_testapp.components.AdapterUsersList;
@@ -63,8 +56,7 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
             }
         });
 
-
-        // TODO: check if internet connection is ON, otherwise notify user and make load from DB
+        // TODO: notify user if the internet connection is OFF
     }
 
     @Override
@@ -89,7 +81,8 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
         NetworkManager.getInstance(this).removeNetworkStateCallback(this);
     }
 
-    private void requestUsersPage(String sinceUser){
+    private void requestUsersPage(String sinceUser) {
+        Log.d(TAG, "requestUsersPage(" + sinceUser + ");");
 
         isLoadingInProgress = true;
 
@@ -97,11 +90,14 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
         if (NetworkManager.getInstance(getBaseContext()).isNetworkAvailable()) {
             GitHubApiRequestManager.getInstance().getUsers(sinceUser);
         } else {
-            //TODO: better to use other thread for database operations... but they are too small
+            //TODO: better to use background thread for database operations... but they are small
             // observable can also be used here
             List<User> users = DBRequestManager.getInstance(getBaseContext()).getPage(sinceUser);
             if (!users.isEmpty()) {
+                Log.d(TAG, "Loaded " + users.size() + " users from database");
                 listAdapter.addUsers(users);
+            } else {
+                Log.d(TAG, "No more users in database");
             }
             isLoadingInProgress = false;
         }
@@ -127,7 +123,7 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
 
     @Override
     public void onNetworkAvailable() {
-        if(listAdapter.getItemCount() == 0 ){
+        if (!isLoadingInProgress && listAdapter.getItemCount() == 0) {
             // We enabled network on empty screen, let's load some data
             requestUsersPage(null);
         }

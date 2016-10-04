@@ -160,10 +160,13 @@ public class DBRequestManager {
                 cursorUser.close();
             }
         } else {
-            //will be loaded from ID 0 till ID 30 first time
+            // Page will be loaded from ID 0 till ID 30 first time
             lastLoadedUserId = -1L;
         }
-        //Getting page since found ID
+
+        Log.d(TAG, "Internal ID of last loaded GitHub user is "  + lastLoadedUserId);
+
+        // Getting page since found ID
         if (lastLoadedUserId != null) {
 
             String[] projectionPage = {
@@ -172,11 +175,10 @@ public class DBRequestManager {
                     DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL
             };
 
-            String sortOrderPage = DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID + " DESC";
-
             long sinceID = lastLoadedUserId + 1L;
             long tillID = sinceID + PAGE_SIZE;
             String limitPage = sinceID + ", " + tillID;
+            Log.d(TAG, "Page limit clause: "  + limitPage);
 
             Cursor cursorPage = db.query(
                     DBHelper.DBUsersContract.Users.TABLE_NAME,
@@ -185,7 +187,7 @@ public class DBRequestManager {
                     null,
                     null,
                     null,
-                    sortOrderPage,
+                    null,
                     limitPage
             );
 
@@ -206,6 +208,10 @@ public class DBRequestManager {
         }
 
         db.close();
+
+        for (User user : users) {
+            Log.d(TAG, "Loaded from DB: " + user.getGitHubId() + ":" + user.getLogin());
+        }
 
         return users;
     }

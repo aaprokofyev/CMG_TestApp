@@ -56,10 +56,10 @@ public class NetworkManager {
     }
 
     public void removeNetworkStateCallback(NetworkStateChanged networkStateChangedCallback) {
+        networkStateListeners.remove(networkStateChangedCallback);
         if (networkStateListeners.isEmpty()) {
             unregisterNetworkReceiver();
         }
-        networkStateListeners.remove(networkStateChangedCallback);
     }
 
     private boolean checkNetworkAvailable() {

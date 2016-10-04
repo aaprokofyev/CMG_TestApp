@@ -7,7 +7,6 @@ import org.parceler.Parcel;
 /**
  * This class is required to parse rate limit error returned with status code 403.
  */
-
 @Parcel
 public class RateLimitError {
 

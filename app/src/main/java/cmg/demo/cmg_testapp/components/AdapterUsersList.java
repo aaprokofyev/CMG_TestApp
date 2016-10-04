@@ -24,7 +24,7 @@ import cmg.demo.cmg_testapp.model.User;
 public class AdapterUsersList extends RecyclerView.Adapter<AdapterUsersList.CustomViewHolder> {
 
     private final String TAG = getClass().getSimpleName();
-    private ArrayList<User> usersList = new ArrayList<>();
+    private static ArrayList<User> usersList = new ArrayList<>();
     private Context context;
     private String lastLoadedId = null;
 
