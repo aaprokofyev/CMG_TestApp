@@ -161,7 +161,7 @@ public class DBRequestManager {
             }
         } else {
             // Page will be loaded from ID 0 till ID 30 first time
-            lastLoadedUserId = -1L;
+            lastLoadedUserId = 0L;
         }
 
         Log.d(TAG, "Internal ID of last loaded GitHub user is "  + lastLoadedUserId);
@@ -175,9 +175,9 @@ public class DBRequestManager {
                     DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL
             };
 
-            long sinceID = lastLoadedUserId + 1L;
-            long tillID = sinceID + PAGE_SIZE;
-            String limitPage = sinceID + ", " + tillID;
+            long OFFSET = lastLoadedUserId;
+            long LIMIT = PAGE_SIZE;
+            String limitPage = OFFSET + ", " + LIMIT;
             Log.d(TAG, "Page limit clause: "  + limitPage);
 
             Cursor cursorPage = db.query(

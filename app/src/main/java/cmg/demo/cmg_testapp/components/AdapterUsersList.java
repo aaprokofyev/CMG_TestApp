@@ -24,7 +24,7 @@ import cmg.demo.cmg_testapp.model.User;
 public class AdapterUsersList extends RecyclerView.Adapter<AdapterUsersList.CustomViewHolder> {
 
     private final String TAG = getClass().getSimpleName();
-    private static ArrayList<User> usersList = new ArrayList<>();
+    private ArrayList<User> usersList = new ArrayList<>();
     private Context context;
     private String lastLoadedId = null;
 
@@ -67,6 +67,7 @@ public class AdapterUsersList extends RecyclerView.Adapter<AdapterUsersList.Cust
     public void addUsers(List<User> users) {
         Log.d(TAG, "UI: Adding " + users.size() + " users");
         usersList.addAll(users);
+        Log.d(TAG, "UI: usersList.size() = " + usersList.size());
 
         lastLoadedId = users.get(users.size() - 1).getGitHubId();
         Log.d(TAG, "UI: lastLoadedId=" + lastLoadedId);
