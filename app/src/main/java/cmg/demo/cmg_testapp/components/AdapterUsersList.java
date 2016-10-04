@@ -26,6 +26,7 @@ public class AdapterUsersList extends RecyclerView.Adapter<AdapterUsersList.Cust
     private final String TAG = getClass().getSimpleName();
     private static ArrayList<User> usersList = new ArrayList<>();
     private Context context;
+    private String lastLoadedId = null;
 
     public static class CustomViewHolder extends RecyclerView.ViewHolder {
 
@@ -67,11 +68,19 @@ public class AdapterUsersList extends RecyclerView.Adapter<AdapterUsersList.Cust
     public void addUsers(List<User> users) {
         Log.d(TAG, "Add users: " + users.size());
         usersList.addAll(users);
+
+        lastLoadedId = users.get(users.size() - 1).getId();
+        Log.d(TAG, "UI: lastLoadedId=" + lastLoadedId);
+
         notifyDataSetChanged();
     }
 
     public void removeUsers() {
         usersList.clear();
         notifyDataSetChanged();
+    }
+
+    public String getLastLoadedId(){
+        return lastLoadedId;
     }
 }

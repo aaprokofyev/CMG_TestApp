@@ -6,6 +6,7 @@ import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import cmg.demo.cmg_testapp.components.AdapterUsersList;
@@ -15,8 +16,10 @@ import cmg.demo.cmg_testapp.model.User;
 
 public class MainActivity extends AppCompatActivity implements GitHubApiRequestManager.GitHubResponseService {
     private final String TAG = getClass().getSimpleName();
+    private final int PRELOAD_ITEMS_DELTA = 10;
 
-    private String lastLoadedId;
+    private boolean isLoadingInProgress = false;
+    private boolean isActivityJustCreated = true;
 
     private RecyclerView recyclerView;
     private AdapterUsersList listAdapter;
@@ -48,47 +51,49 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
                 Log.d(TAG, "visibleItemCount=" + visibleItemCount + ", totalItemCount=" + totalItemCount + ", firstVisibleItem=" + firstVisibleItem);
 
                 // TODO: need to load earlier then we reach the bottom + check if some request is already in progress
-                if (firstVisibleItem == totalItemCount - visibleItemCount) {
+                if (!isLoadingInProgress && firstVisibleItem >= totalItemCount - visibleItemCount - PRELOAD_ITEMS_DELTA) {
                     Log.d(TAG, "Scrolled to the bottom");
-                    GitHubApiRequestManager.getInstance().getUsers(lastLoadedId);
+                    GitHubApiRequestManager.getInstance().getUsers(listAdapter.getLastLoadedId());
+                    isLoadingInProgress = true;
                 }
             }
         });
 
-        // TODO: check if internet connection is ON, otherwise notify user
-        GitHubApiRequestManager.getInstance().getUsers(null);
+        // TODO: check if internet connection is ON, otherwise notify user and make load from DB
     }
 
     @Override
-    protected void onResume() {
-        Log.d(TAG, "onResume");
-        super.onResume();
+    protected void onStart() {
+        Log.d(TAG, "onStart");
+        super.onStart();
         GitHubApiRequestManager.getInstance().registerResponseServiceCallback(this);
+        if (isActivityJustCreated) {
+            GitHubApiRequestManager.getInstance().getUsers(null);
+            isActivityJustCreated = false;
+        }
     }
 
     @Override
-    protected void onPause() {
-        Log.d(TAG, "onPause");
-        super.onPause();
+    protected void onStop() {
+        Log.d(TAG, "onStop");
+        super.onStop();
         GitHubApiRequestManager.getInstance().removeResponseServiceCallBack(this);
-//        User user = DBRequestManager.getInstance(this).get("33");
-//        if (user != null) {
-//            Log.d(TAG, "User 33 from database: ID:" + user.getId() + ", LOGIN:" + user.getLogin() + ", PHOTOURL:" + user.getAvatarUrl());
-//        } else {
-//            Log.d(TAG, "No such user");
-//        }
+        List<User> users = new ArrayList<>();
+
+        users.addAll(DBRequestManager.getInstance(this).getPage(null));
+        users.addAll(DBRequestManager.getInstance(this).getPage("46"));
+
+        Log.d(TAG, "Loaded users: " + users.size());
     }
 
     @Override
     public void onUsersReceived(List<User> users) {
-        //TODO: onUsersReceived will not be called in case server responded earlier then onResume called first time
-        // Need to move first request out from onCreate to onResume and check if this first activity launch or not
-        // This code should probably be connected with database
         Log.d(TAG, "onUsersReceived");
+
+        isLoadingInProgress = false;
+
         if (users != null && !users.isEmpty()) {
             listAdapter.addUsers(users);
-            lastLoadedId = users.get(users.size() - 1).getId();
-            Log.d(TAG, "lastLoadedId=" + lastLoadedId);
 
             List<Long> ids = DBRequestManager.getInstance(this).putAll(users);
             Log.d(TAG, "Users are added in database: internal ids:" + ids.toString());
