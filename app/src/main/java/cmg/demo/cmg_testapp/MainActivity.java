@@ -9,10 +9,13 @@ import android.util.Log;
 import java.util.List;
 
 import cmg.demo.cmg_testapp.components.AdapterUsersList;
-import cmg.demo.cmg_testapp.managers.DBRequestManager;
+import cmg.demo.cmg_testapp.managers.DBInteractor;
 import cmg.demo.cmg_testapp.managers.GitHubApiRequestManager;
 import cmg.demo.cmg_testapp.managers.NetworkManager;
 import cmg.demo.cmg_testapp.model.User;
+import rx.Scheduler;
+import rx.android.schedulers.AndroidSchedulers;
+import rx.functions.Action1;
 
 public class MainActivity extends AppCompatActivity implements GitHubApiRequestManager.GitHubResponseService, NetworkManager.NetworkStateChanged {
     private final String TAG = getClass().getSimpleName();
@@ -92,13 +95,22 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
         } else {
             //TODO: better to use background thread for database operations... but they are small
             // observable can also be used here
-            List<User> users = DBRequestManager.getInstance(getBaseContext()).getPage(sinceUser);
-            if (!users.isEmpty()) {
-                Log.d(TAG, "Loaded " + users.size() + " users from database");
-                listAdapter.addUsers(users);
-            } else {
-                Log.d(TAG, "No more users in database");
-            }
+            DBInteractor.getInstance(getBaseContext())
+                    .getObservablePage(sinceUser)
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .doOnNext(new Action1<List<User>>() {
+                        @Override
+                        public void call(List<User> users) {
+                            if (!users.isEmpty()) {
+                                Log.d(TAG, "Loaded " + users.size() + " users from database");
+                                listAdapter.addUsers(users);
+                            } else {
+                                Log.d(TAG, "No more users in database");
+                            }
+                        }
+                    })
+                    .subscribe();
+
             isLoadingInProgress = false;
         }
     }
@@ -111,7 +123,7 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
         if (!users.isEmpty()) {
             listAdapter.addUsers(users);
             // When users received from the network they immediately updated in DB
-            DBRequestManager.getInstance(this).insertOrUpdate(users);
+            DBInteractor.getInstance(this).insertOrUpdate(users);
         }
     }
 
