@@ -1,7 +1,7 @@
 package cmg.demo.cmg_testapp;
 
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
@@ -9,12 +9,12 @@ import android.util.Log;
 import java.util.List;
 
 import cmg.demo.cmg_testapp.components.AdapterUsersList;
-import cmg.demo.cmg_testapp.managers.DBRequestManager;
+import cmg.demo.cmg_testapp.managers.DBInteractor;
 import cmg.demo.cmg_testapp.managers.GitHubApiRequestManager;
 import cmg.demo.cmg_testapp.managers.NetworkManager;
 import cmg.demo.cmg_testapp.model.User;
 
-public class MainActivity extends AppCompatActivity implements GitHubApiRequestManager.GitHubResponseService, NetworkManager.NetworkStateChanged {
+public class MainActivity extends AppCompatActivity implements GitHubApiRequestManager.GitHubResponseService, NetworkManager.NetworkStateChanged, DBInteractor.DBPageLoadedService {
     private final String TAG = getClass().getSimpleName();
     private final int PRELOAD_ITEMS_DELTA = 10;
 
@@ -64,6 +64,7 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
         Log.d(TAG, "onStart");
         super.onStart();
         GitHubApiRequestManager.getInstance().registerResponseServiceCallback(this);
+        DBInteractor.getInstance(this).registerPageLoadedCallback(this);
         NetworkManager.getInstance(this).registerNetworkStateCallback(this);
 
         // Request first page when activity just created
@@ -78,6 +79,7 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
         Log.d(TAG, "onStop");
         super.onStop();
         GitHubApiRequestManager.getInstance().removeResponseServiceCallBack(this);
+        DBInteractor.getInstance(this).removePageLoadedCallBack(this);
         NetworkManager.getInstance(this).removeNetworkStateCallback(this);
     }
 
@@ -90,16 +92,7 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
         if (NetworkManager.getInstance(getBaseContext()).isNetworkAvailable()) {
             GitHubApiRequestManager.getInstance().getUsers(sinceUser);
         } else {
-            //TODO: better to use background thread for database operations... but they are small
-            // observable can also be used here
-            List<User> users = DBRequestManager.getInstance(getBaseContext()).getPage(sinceUser);
-            if (!users.isEmpty()) {
-                Log.d(TAG, "Loaded " + users.size() + " users from database");
-                listAdapter.addUsers(users);
-            } else {
-                Log.d(TAG, "No more users in database");
-            }
-            isLoadingInProgress = false;
+            DBInteractor.getInstance(this).requestUsersPage(sinceUser);
         }
     }
 
@@ -111,7 +104,7 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
         if (!users.isEmpty()) {
             listAdapter.addUsers(users);
             // When users received from the network they immediately updated in DB
-            DBRequestManager.getInstance(this).insertOrUpdate(users);
+            DBInteractor.getInstance(this).insertOrUpdate(users);
         }
     }
 
@@ -132,5 +125,17 @@ public class MainActivity extends AppCompatActivity implements GitHubApiRequestM
     @Override
     public void onNetworkUnavailable() {
         //do nothing
+    }
+
+    @Override
+    public void onPageLoaded(List<User> users) {
+        if (!users.isEmpty()) {
+            Log.d(TAG, "Loaded " + users.size() + " users from database");
+            listAdapter.addUsers(users);
+        } else {
+            Log.d(TAG, "No more users in database");
+        }
+
+        isLoadingInProgress = false;
     }
 }

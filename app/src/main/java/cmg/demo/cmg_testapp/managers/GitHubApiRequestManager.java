@@ -28,12 +28,12 @@ public class GitHubApiRequestManager implements Observer<List<User>> {
         gitHubApiInteractor = new GitHubApiInteractor();
     }
 
-    public static class RequestManagerHolder {
+    public static class GitHubApiRequestManagerHolder {
         public static final GitHubApiRequestManager HOLDER_INSTANCE = new GitHubApiRequestManager();
     }
 
     public static GitHubApiRequestManager getInstance() {
-        return RequestManagerHolder.HOLDER_INSTANCE;
+        return GitHubApiRequestManagerHolder.HOLDER_INSTANCE;
     }
 
     public void registerResponseServiceCallback(GitHubResponseService gitHubResponseServiceCallback) {
