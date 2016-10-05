@@ -13,6 +13,9 @@ import java.util.concurrent.Callable;
 import cmg.demo.cmg_testapp.model.User;
 import rx.Observable;
 import rx.Subscriber;
+import rx.android.schedulers.AndroidSchedulers;
+import rx.functions.Action0;
+import rx.functions.Action1;
 import rx.schedulers.Schedulers;
 
 /**
@@ -44,96 +47,127 @@ public class DBInteractor {
         return localInstance;
     }
 
-    /**
-     * @param user that need to be inserted into the database
-     * @return primary key of the new created row
-     */
-    public long put(User user) {
-        SQLiteDatabase db = dbHelper.getWritableDatabase();
+    private static List<DBPageLoadedService> dbPageLoadedServiceListeners = new ArrayList<>();
 
-        ContentValues values = new ContentValues();
-        values.put(DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID, user.getGitHubId());
-        values.put(DBHelper.DBUsersContract.Users.COLUMN_LOGIN, user.getLogin());
-        values.put(DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL, user.getAvatarUrl());
-        long id = db.insert(DBHelper.DBUsersContract.Users.TABLE_NAME, null, values);
-
-        db.close();
-
-        return id;
+    public void registerPageLoadedCallback(DBPageLoadedService dbPageLoadedServiceCallback) {
+        dbPageLoadedServiceListeners.add(dbPageLoadedServiceCallback);
     }
 
-    /**
-     * @param users that need to be inserted into the database
-     * @return list of primary keys for the inserted users
-     */
-    public List<Long> putAll(List<User> users) {
-        List<Long> ids = new ArrayList<>(users.size());
-        for (User user : users) {
-            ids.add(put(user));
-            //TODO: optimize in order not to open and close db on each user
-        }
-        return ids;
+    public void removePageLoadedCallBack(DBPageLoadedService dbPageLoadedServiceCallback) {
+        dbPageLoadedServiceListeners.remove(dbPageLoadedServiceCallback);
     }
 
-    /**
-     * @param githubId of the user
-     * @return User with details or null if not found in database
-     */
-    public User get(String githubId) {
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
+    private static <T> Observable<T> makeObservable(final Callable<T> func) {
+        return Observable.create(
+                new Observable.OnSubscribe<T>() {
+                    @Override
+                    public void call(Subscriber<? super T> subscriber) {
+                        try {
+                            subscriber.onNext(func.call());
+                        } catch (Exception ex) {
+                            Log.e(TAG, "Error reading from the database", ex);
+                        }
+                    }
+                });
+    }
 
-        String[] projection = {
-                DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID,
-                DBHelper.DBUsersContract.Users.COLUMN_LOGIN,
-                DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL
-        };
+    private Callable<Long> callablePut(final SQLiteDatabase db, final User user) {
+        return new Callable<Long>() {
+            @Override
+            public Long call() throws Exception {
+                ContentValues values = new ContentValues();
+                values.put(DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID, user.getGitHubId());
+                values.put(DBHelper.DBUsersContract.Users.COLUMN_LOGIN, user.getLogin());
+                values.put(DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL, user.getAvatarUrl());
+                long id = db.insert(DBHelper.DBUsersContract.Users.TABLE_NAME, null, values);
 
-        String selection = DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID + " = ?";
-        String[] selectionArgs = {githubId};
-
-        String sortOrder = DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID + " DESC";
-
-        Cursor cursor = db.query(
-                DBHelper.DBUsersContract.Users.TABLE_NAME,
-                projection,
-                selection,
-                selectionArgs,
-                null,
-                null,
-                sortOrder
-        );
-        User user = null;
-
-        if (cursor != null) {
-
-            if (cursor.getCount() > 0) {
-                cursor.moveToFirst();
-                user = new User();
-                user.setGitHubId(cursor.getString(cursor.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID)));
-                user.setLogin(cursor.getString(cursor.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_LOGIN)));
-                user.setAvatarUrl(cursor.getString(cursor.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL)));
+                return id;
             }
-
-            cursor.close();
-        }
-
-        db.close();
-
-        return user;
+        };
     }
 
-    /**
-     * Get page of users since provided github ID
-     *
-     * @param sinceGithubId
-     * @return list of users or empty list if no users found
-     */
-    private Callable<List<User>> getPage(final String sinceGithubId) {
+    public Observable<Long> put(SQLiteDatabase db, User user) {
+        return makeObservable(callablePut(db, user))
+                .subscribeOn(Schedulers.computation());
+    }
+
+    private Callable<Void> callablePutAll(final SQLiteDatabase db, final List<User> users) {
+        return new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                for (User user : users) {
+                    ContentValues values = new ContentValues();
+                    values.put(DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID, user.getGitHubId());
+                    values.put(DBHelper.DBUsersContract.Users.COLUMN_LOGIN, user.getLogin());
+                    values.put(DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL, user.getAvatarUrl());
+                    long id = db.insert(DBHelper.DBUsersContract.Users.TABLE_NAME, null, values);
+
+                    Log.d(TAG, "Inserting user " + user.getGitHubId());
+                }
+
+                return null;
+            }
+        };
+    }
+
+    public Observable<Void> putAll(SQLiteDatabase db, List<User> users) {
+        return makeObservable(callablePutAll(db, users))
+                .subscribeOn(Schedulers.computation());
+    }
+
+    private Callable<User> callableGet(final SQLiteDatabase db, final String githubId) {
+        return new Callable<User>() {
+            @Override
+            public User call() throws Exception {
+                String[] projection = {
+                        DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID,
+                        DBHelper.DBUsersContract.Users.COLUMN_LOGIN,
+                        DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL
+                };
+
+                String selection = DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID + " = ?";
+                String[] selectionArgs = {githubId};
+
+                String sortOrder = DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID + " DESC";
+
+                Cursor cursor = db.query(
+                        DBHelper.DBUsersContract.Users.TABLE_NAME,
+                        projection,
+                        selection,
+                        selectionArgs,
+                        null,
+                        null,
+                        sortOrder
+                );
+                User user = null;
+
+                if (cursor != null) {
+
+                    if (cursor.getCount() > 0) {
+                        cursor.moveToFirst();
+                        user = new User();
+                        user.setGitHubId(cursor.getString(cursor.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID)));
+                        user.setLogin(cursor.getString(cursor.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_LOGIN)));
+                        user.setAvatarUrl(cursor.getString(cursor.getColumnIndexOrThrow(DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL)));
+                    }
+
+                    cursor.close();
+                }
+
+                return user;
+            }
+        };
+    }
+
+    public Observable<User> get(SQLiteDatabase db, String githubId) {
+        return makeObservable(callableGet(db, githubId))
+                .subscribeOn(Schedulers.computation());
+    }
+
+    private Callable<List<User>> callableGetPage(final SQLiteDatabase db, final String sinceGithubId) {
         return new Callable<List<User>>() {
             @Override
             public List<User> call() throws Exception {
-                SQLiteDatabase db = dbHelper.getReadableDatabase();
-
                 List<User> users = new ArrayList<>();
                 Long lastLoadedUserId = null;
 
@@ -170,7 +204,7 @@ public class DBInteractor {
                     lastLoadedUserId = 0L;
                 }
 
-                Log.d(TAG, "Internal ID of last loaded GitHub user is "  + lastLoadedUserId);
+                Log.d(TAG, "Internal ID of last loaded GitHub user is " + lastLoadedUserId);
 
                 // Getting page since found ID
                 if (lastLoadedUserId != null) {
@@ -184,7 +218,7 @@ public class DBInteractor {
                     long OFFSET = lastLoadedUserId;
                     long LIMIT = PAGE_SIZE;
                     String limitPage = OFFSET + ", " + LIMIT;
-                    Log.d(TAG, "Page limit clause: "  + limitPage);
+                    Log.d(TAG, "Page limit clause: " + limitPage);
 
                     Cursor cursorPage = db.query(
                             DBHelper.DBUsersContract.Users.TABLE_NAME,
@@ -213,8 +247,6 @@ public class DBInteractor {
 
                 }
 
-                db.close();
-
                 for (User user : users) {
                     Log.d(TAG, "Loaded from DB: " + user.getGitHubId() + ":" + user.getLogin());
                 }
@@ -224,70 +256,158 @@ public class DBInteractor {
         };
     }
 
-    public Observable<List<User>> getObservablePage(String sinceId) {
-        return makeObservable(getPage(sinceId))
+    public Observable<List<User>> getPage(SQLiteDatabase db, String sinceId) {
+        return makeObservable(callableGetPage(db, sinceId))
                 .subscribeOn(Schedulers.computation());
     }
 
-    private static <T> Observable<T> makeObservable(final Callable<T> func) {
-        return Observable.create(
-                new Observable.OnSubscribe<T>() {
+    private Callable<Integer> callableUpdate(final SQLiteDatabase db, final User user) {
+        return new Callable<Integer>() {
+            @Override
+            public Integer call() throws Exception {
+                ContentValues values = new ContentValues();
+                values.put(DBHelper.DBUsersContract.Users.COLUMN_LOGIN, user.getLogin());
+                values.put(DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL, user.getAvatarUrl());
+
+                String selection = DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID + " LIKE ?";
+                String[] selectionArgs = {String.valueOf(user.getGitHubId())};
+
+                int count = db.update(
+                        DBHelper.DBUsersContract.Users.TABLE_NAME,
+                        values,
+                        selection,
+                        selectionArgs);
+
+                return count;
+            }
+        };
+    }
+
+    public Observable<Integer> update(SQLiteDatabase db, User user) {
+        return makeObservable(callableUpdate(db, user))
+                .subscribeOn(Schedulers.computation());
+    }
+
+    private Callable<Void> callableUpdateAll(final SQLiteDatabase db, final List<User> users) {
+        return new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+
+                for (User user : users) {
+
+                    ContentValues values = new ContentValues();
+                    values.put(DBHelper.DBUsersContract.Users.COLUMN_LOGIN, user.getLogin());
+                    values.put(DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL, user.getAvatarUrl());
+
+                    String selection = DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID + " LIKE ?";
+                    String[] selectionArgs = {String.valueOf(user.getGitHubId())};
+
+                    int count = db.update(
+                            DBHelper.DBUsersContract.Users.TABLE_NAME,
+                            values,
+                            selection,
+                            selectionArgs);
+
+                    Log.d(TAG, "Updating user " + user.getGitHubId());
+                }
+
+                return null;
+            }
+        };
+    }
+
+    public Observable<Void> updateAll(SQLiteDatabase db, List<User> users) {
+        return makeObservable(callableUpdateAll(db, users))
+                .subscribeOn(Schedulers.computation());
+    }
+
+    public void requestUsersPage(String sinceUserId) {
+        final SQLiteDatabase readableDb = dbHelper.getReadableDatabase();
+        getPage(readableDb, sinceUserId)
+                .observeOn(AndroidSchedulers.mainThread())
+                .doOnNext(new Action1<List<User>>() {
                     @Override
-                    public void call(Subscriber<? super T> subscriber) {
-                        try {
-                            subscriber.onNext(func.call());
-                        } catch(Exception ex) {
-                            Log.e(TAG, "Error reading from the database", ex);
+                    public void call(List<User> users) {
+                        for (DBPageLoadedService listener : dbPageLoadedServiceListeners) {
+                            listener.onPageLoaded(users);
                         }
                     }
-                });
+                })
+                .doOnError(new Action1<Throwable>() {
+                    @Override
+                    public void call(Throwable throwable) {
+                        for (DBPageLoadedService listener : dbPageLoadedServiceListeners) {
+                            listener.onPageLoaded(null);
+                        }
+                    }
+                })
+                .doOnCompleted(new Action0() {
+                    @Override
+                    public void call() {
+                        readableDb.close();
+                    }
+                })
+                .subscribe();
     }
 
-
-    /**
-     * Updating profile info in DB based on received data
-     *
-     * @param user User to be updated
-     * @return count of updated entries. Should be 1 or probably 0 if everything is fine with write functionality :)
-     */
-    public int update(User user) {
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
-
-        ContentValues values = new ContentValues();
-        values.put(DBHelper.DBUsersContract.Users.COLUMN_LOGIN, user.getLogin());
-        values.put(DBHelper.DBUsersContract.Users.COLUMN_PHOTO_URL, user.getAvatarUrl());
-
-        String selection = DBHelper.DBUsersContract.Users.COLUMN_GITHUB_ID + " LIKE ?";
-        String[] selectionArgs = {String.valueOf(user.getGitHubId())};
-
-        int count = db.update(
-                DBHelper.DBUsersContract.Users.TABLE_NAME,
-                values,
-                selection,
-                selectionArgs);
-
-        db.close();
-        return count;
-    }
-
-    /**
-     * This function is used to insert or update users in database
-     *
-     * @param users to put/update in/into the database
-     */
     public void insertOrUpdate(List<User> users) {
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
 
-        for (User user : users) {
-            if (get(user.getGitHubId()) != null) {
-                update(user);
-                Log.d(TAG, "Updating user " + user.getGitHubId());
-            } else {
-                //TODO: use putAll after optimization
-                put(user);
-                Log.d(TAG, "Inserting user " + user.getGitHubId());
-            }
+        final SQLiteDatabase readableDb = dbHelper.getReadableDatabase();
+
+        for (final User user : users) {
+            get(readableDb, user.getGitHubId())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .doOnNext(new Action1<User>() {
+                        @Override
+                        public void call(final User userFromDB) {
+                            if (userFromDB != null) {
+                                final SQLiteDatabase readableDb2 = dbHelper.getReadableDatabase();
+                                update(readableDb2, userFromDB)
+                                        .observeOn(AndroidSchedulers.mainThread())
+                                        .doOnNext(new Action1<Integer>() {
+                                            @Override
+                                            public void call(Integer integer) {
+                                                Log.d(TAG, "Updating user " + userFromDB.getGitHubId());
+                                            }
+                                        })
+                                        .doOnCompleted(new Action0() {
+                                            @Override
+                                            public void call() {
+                                                readableDb2.close();
+                                            }
+                                        })
+                                        .subscribe();
+                            } else {
+                                final SQLiteDatabase writableDb = dbHelper.getWritableDatabase();
+                                put(writableDb, user)
+                                        .observeOn(AndroidSchedulers.mainThread())
+                                        .doOnNext(new Action1<Long>() {
+                                            @Override
+                                            public void call(Long aLong) {
+                                                Log.d(TAG, "Inserting user " + user.getGitHubId());
+                                            }
+                                        })
+                                        .doOnCompleted(new Action0() {
+                                            @Override
+                                            public void call() {
+                                                writableDb.close();
+                                            }
+                                        })
+                                        .subscribe();
+                            }
+                        }
+                    })
+                    .doOnCompleted(new Action0() {
+                        @Override
+                        public void call() {
+                            readableDb.close();
+                        }
+                    })
+                    .subscribe();
         }
-        db.close();
+    }
+
+    public interface DBPageLoadedService {
+        void onPageLoaded(List<User> users);
     }
 }
